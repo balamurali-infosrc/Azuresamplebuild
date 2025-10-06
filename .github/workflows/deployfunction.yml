@@ -8,6 +8,8 @@ permissions:
   id-token: write
   contents: read
 
+  env:
+    TF_WORKING_DIR: ./TestAzureFunction
 jobs:
   terraform-deploy:
     runs-on: ubuntu-latest
@@ -37,8 +39,7 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           auth-type: service_principal
-          env:
-            TF_WORKING_DIR: ./TestAzureFunction
+          
 
       - name: Terraform Init
         working-directory: ${{ env.TF_WORKING_DIR }}

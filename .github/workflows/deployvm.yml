@@ -8,6 +8,8 @@ permissions:
   id-token: write
   contents: read
   pages: write
+  env:
+    TF_WORKING_DIR: ./TestVMUpdated
 jobs:
   terraform:
     name: Terraform Windows VM Deployment
@@ -36,8 +38,7 @@ jobs:
           # "galleryEndpointUrl": "https://gallery.azure.com/"
           # "managementEndpointUrl": "https://management.core.windows.net/"
           auth-type: SERVICE_PRINCIPAL
-          env:
-            TF_WORKING_DIR: ./TestVMUpdated
+          
 
       - name: Terraform Init
         working-directory: ${{ env.TF_WORKING_DIR }}
@@ -50,7 +51,7 @@ jobs:
       - name: Terraform Apply
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform apply -auto-approve tfplan
-        
+
       # - name: Terraform Init
       #   run: terraform init -chdir=./TestVMUpdated
 

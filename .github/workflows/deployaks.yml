@@ -8,6 +8,8 @@ permissions:
       id-token: write
       contents: read
       pages: write
+env:
+   TF_WORKING_DIR: ./AKS_Terraform
 jobs:
   terraform:
     name: Terraform AKS Deployment
@@ -29,8 +31,7 @@ jobs:
         uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: 1.9.0
-          env:
-            TF_WORKING_DIR: ./AKS_Terraform
+          
       - name: Terraform Init
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform init
