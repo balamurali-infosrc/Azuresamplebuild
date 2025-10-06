@@ -10,7 +10,7 @@ permissions:
       pages: write
 env:
    TF_WORKING_DIR: ./AKS_Terraform
-   TF_WORKING_DIR_deploy: ./AKS_Terraform/deployment/
+  #  TF_WORKING_DIR_deploy: ./AKS_Terraform/deployment
 jobs:
   terraform:
     name: Terraform AKS Deployment
@@ -62,7 +62,9 @@ jobs:
       id-token: write
       contents: read
       pages: write
-
+    env:
+    # default manifest path in your repo (change if different)
+     TF_WORKING_DIR_deploy: AKS_Terraform/deployment
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -86,4 +88,4 @@ jobs:
       - name: Apply Kubernetes manifests
         working-directory: ${{ env.TF_WORKING_DIR_deploy }}
         run: |
-         kubectl apply -f $TF_WORKING_DIR_deploy
+         kubectl apply -f $TF_WORKING_DIR_deploy --recursive
