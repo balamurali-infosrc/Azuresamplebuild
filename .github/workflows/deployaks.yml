@@ -62,7 +62,7 @@ jobs:
       contents: read
       pages: write
   env:
-    TF_WORKING_DIR: ./deployment/
+    TF_WORKING_DIR_deploy: ./AKS_Terraform/deployment/
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -84,5 +84,5 @@ jobs:
       - name: Get AKS credentials
         run: az aks get-credentials -g demo-aks-rg -n demo-aks-aks --overwrite-existing 
       - name: Apply Kubernetes manifests
-        working-directory: ${{ env.TF_WORKING_DIR }}
+        working-directory: ${{ env.TF_WORKING_DIR_deploy }}
         run: kubectl apply -f 
