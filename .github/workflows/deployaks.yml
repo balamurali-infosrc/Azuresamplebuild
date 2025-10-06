@@ -55,39 +55,72 @@ jobs:
       #   run: terraform apply -auto-approve tfplan
 
   deploy:
-    name: Deploy to AKS
-    needs: terraform
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
-      pages: write
-    env:
+  name: Deploy to AKS
+  needs: terraform
+  runs-on: ubuntu-latest
+  permissions:
+    id-token: write
+    contents: read
+    pages: write
+  env:
     # default manifest path in your repo (change if different)
-     TF_WORKING_DIR_deploy: ./AKS_Terraform/deployment
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+    TF_WORKING_DIR_deploy: ./AKS_Terraform/deployment
 
-      - name: Azure Login
-        uses: azure/login@v1
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          auth-type: service_principal
+  steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
 
-      - name: Install kubectl
-        uses: azure/setup-kubectl@v3
-        with:
-          version: 'latest'
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        auth-type: service_principal
 
-      - name: Get AKS credentials
-        run: az aks get-credentials -g demo-aks-rg -n demo-aks-aks --overwrite-existing 
-      - name: Apply Kubernetes manifests
-        working-directory: ${{ env.TF_WORKING_DIR_deploy }}
-        run: |
-         kubectl apply -f $TF_WORKING_DIR_deploy --recursive
+    - name: Install kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'latest'
 
-   
+    - name: Validate & list deployment folder
+      run: |
+        set -euo pipefail
+        DEPLOY_PATH="${GITHUB_WORKSPACE}/${TF_WORKING_DIR_deploy#./}"
+        echo "Checking deployment path: $DEPLOY_PATH"
+        if [ ! -e "$DEPLOY_PATH" ]; then
+          echo "::error::Deployment path does not exist: $DEPLOY_PATH"
+          echo "Contents of repo root for debugging:"
+          ls -la "${GITHUB_WORKSPACE}" || true
+          exit 1
+        fi
+        echo "Deployment path exists — listing contents:"
+        ls -la "$DEPLOY_PATH" || true
+
+    - name: Get AKS credentials
+      run: |
+        set -euo pipefail
+        # Replace these with terraform outputs if you prefer:
+        # az aks get-credentials -g ${{ needs.terraform.outputs.resource_group }} -n ${{ needs.terraform.outputs.aks_name }} --overwrite-existing
+        az aks get-credentials -g demo-aks-rg -n demo-aks-aks --overwrite-existing
+
+    - name: Apply Kubernetes manifests (with retries)
+      run: |
+        set -euo pipefail
+        DEPLOY_PATH="${GITHUB_WORKSPACE}/${TF_WORKING_DIR_deploy#./}"
+        echo "Applying manifests from: $DEPLOY_PATH"
+        attempts=0
+        until [ $attempts -ge 3 ]
+        do
+          kubectl apply -f "$DEPLOY_PATH" --recursive && break
+          attempts=$((attempts+1))
+          echo "kubectl apply failed (attempt $attempts). Retrying in $((attempts*5))s..."
+          sleep $((attempts*5))
+        done
+        if [ $attempts -ge 3 ]; then
+          echo "::error::kubectl apply failed after retries"
+          kubectl -n kube-system get pods --no-headers || true
+          exit 1
+        fi
+        echo "kubectl apply succeeded"
