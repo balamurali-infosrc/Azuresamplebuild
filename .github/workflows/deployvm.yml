@@ -36,12 +36,28 @@ jobs:
           # "galleryEndpointUrl": "https://gallery.azure.com/"
           # "managementEndpointUrl": "https://management.core.windows.net/"
           auth-type: SERVICE_PRINCIPAL
+          env:
+            TF_WORKING_DIR: ./TestVMUpdated
 
       - name: Terraform Init
-        run: terraform init 
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform init
 
       - name: Terraform Plan
+        working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform plan -out=tfplan
 
       - name: Terraform Apply
+        working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform apply -auto-approve tfplan
+        
+      # - name: Terraform Init
+      #   run: terraform init -chdir=./TestVMUpdated
+
+      # - name: Terraform Plan
+      #   run: terraform plan -out=tfplan -chdir=./TestVMUpdated
+
+      # - name: Terraform Apply
+      #   run: terraform apply -auto-approve tfplan 
+
+       

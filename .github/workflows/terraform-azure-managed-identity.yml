@@ -15,6 +15,7 @@ permissions:
 env:
   TF_VERSION: "1.8.5"
   TF_WORKING_DIR: "."   # path to your Terraform files
+  TF_WORKING_DIR_others: ./azure-managed_identity
 
 jobs:
   terraform:
@@ -43,19 +44,25 @@ jobs:
       # 3️⃣ Initialize Terraform
       - name: Terraform Init
         working-directory: ${{ env.TF_WORKING_DIR }}
-        run: terraform init
+        working-directory: ${{ env.TF_WORKING_DIR_others }}
+        run: terraform init 
+
 
       # 4️⃣ Validate Terraform configuration
       - name: Terraform Validate
         working-directory: ${{ env.TF_WORKING_DIR }}
+        working-directory: ${{ env.TF_WORKING_DIR_others }}
         run: terraform validate
 
       # 5️⃣ Plan Terraform deployment
       - name: Terraform Plan
         working-directory: ${{ env.TF_WORKING_DIR }}
+        working-directory: ${{ env.TF_WORKING_DIR_others }}
         run: terraform plan -out=tfplan
 
       # 6️⃣ Apply Terraform deployment
       - name: Terraform Apply
         working-directory: ${{ env.TF_WORKING_DIR }}
-        run: terraform apply -auto-approve tfplan
+        working-directory: ${{ env.TF_WORKING_DIR_others }}
+        run: terraform apply -auto-approve tfplan 
+
