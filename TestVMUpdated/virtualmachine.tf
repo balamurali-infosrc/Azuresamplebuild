@@ -8,6 +8,13 @@ ip_configuration {
   subnet_id = azurerm_subnet.azuretest_subnet.id
 }
 }
+resource "azurerm_public_ip" "pubip" {
+  name                = "vm-demo-pip"
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_resource_group.rg.location
+  allocation_method   = "Static"
+  sku                 = "Standard"   # change from Basic
+}
 
 resource "azurerm_windows_virtual_machine" "azuretest-vm"{
 admin_password = "test@123"
