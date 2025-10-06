@@ -85,4 +85,5 @@ jobs:
         run: az aks get-credentials -g demo-aks-rg -n demo-aks-aks --overwrite-existing 
       - name: Apply Kubernetes manifests
         working-directory: ${{ env.TF_WORKING_DIR_deploy }}
-        run: kubectl apply -f 
+        run: |
+         kubectl apply -f $TF_WORKING_DIR_deploy

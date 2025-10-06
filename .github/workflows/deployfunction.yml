@@ -168,8 +168,9 @@ jobs:
           echo "Created $ZIP with size: $(stat -c%s "$ZIP") bytes"
 
       - name: Deploy Function App (robust)
+        working-directory: ${{ env.TF_WORKING_DIR }}
         env:
-          working-directory: ${{ env.TF_WORKING_DIR }}
+
           FUNCTION_NAME: ${{ env.FUNCTION_NAME }}
           RG: ${{ env.RG }}
           AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
