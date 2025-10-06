@@ -6,6 +6,7 @@ ip_configuration {
   name = "Internal"
   private_ip_address_allocation = "Dynamic"
   subnet_id = azurerm_subnet.azuretest_subnet.id
+  public_ip_address_id          = azurerm_public_ip.pubip.id
 }
 }
 resource "azurerm_public_ip" "pubip" {
