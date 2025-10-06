@@ -3,7 +3,7 @@ name: Deploy Azure Windows VM using Terraform
 on:
   push:
     branches:
-      - main  # Trigger on pushes to the main branch
+      - main  # Trigger on pushes to the main branchs
 permissions:
   id-token: write
   contents: read
