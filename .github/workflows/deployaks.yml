@@ -10,6 +10,7 @@ permissions:
       pages: write
 env:
    TF_WORKING_DIR: ./AKS_Terraform
+   TF_WORKING_DIR_deploy: ./AKS_Terraform/deployment/
 jobs:
   terraform:
     name: Terraform AKS Deployment
@@ -61,8 +62,7 @@ jobs:
       id-token: write
       contents: read
       pages: write
-  env:
-    TF_WORKING_DIR_deploy: ./AKS_Terraform/deployment/
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -85,4 +85,4 @@ jobs:
         run: az aks get-credentials -g demo-aks-rg -n demo-aks-aks --overwrite-existing 
       - name: Apply Kubernetes manifests
         working-directory: ${{ env.TF_WORKING_DIR_deploy }}
-        run: kubectl apply -f 
+        run: kubectl apply -f deployment/
