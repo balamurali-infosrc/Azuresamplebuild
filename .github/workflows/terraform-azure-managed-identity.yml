@@ -43,7 +43,7 @@ jobs:
 
       # 3️⃣ Initialize Terraform
       - name: Terraform Init
-        working-directory: ${{ env.TF_WORKING_DIR }}
+        # working-directory: ${{ env.TF_WORKING_DIR }}
         working-directory: ${{ env.TF_WORKING_DIR_others }}
         run: terraform init 
 

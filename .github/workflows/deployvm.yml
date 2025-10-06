@@ -8,8 +8,8 @@ permissions:
   id-token: write
   contents: read
   pages: write
-  env:
-    TF_WORKING_DIR: ./TestVMUpdated
+env:
+   TF_WORKING_DIR: ./TestVMUpdated
 jobs:
   terraform:
     name: Terraform Windows VM Deployment

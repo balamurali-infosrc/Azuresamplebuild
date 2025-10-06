@@ -8,8 +8,8 @@ permissions:
   id-token: write
   contents: read
 
-  env:
-    TF_WORKING_DIR: ./TestAzureFunction
+env:
+   TF_WORKING_DIR: ./TestAzureFunction/terraform
 jobs:
   terraform-deploy:
     runs-on: ubuntu-latest
