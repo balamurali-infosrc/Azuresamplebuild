@@ -1,0 +1,207 @@
+name: Terraform Build-and-Deploy Azure Function
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  terraform-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install jq (needed for Kudu fallback)
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.8.5
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          auth-type: service_principal
+
+      - name: Terraform Init
+        working-directory: terraform
+        run: terraform init -input=false
+
+      - name: Terraform Plan
+        working-directory: terraform
+        run: terraform plan -input=false
+
+      - name: Terraform Apply
+        working-directory: terraform
+        run: terraform apply -auto-approve -input=false
+
+      - name: Get Terraform outputs (safe)
+        id: tfoutputs
+        working-directory: terraform
+        run: |
+          # replace these names if you changed Terraform outputs
+          FN=$(terraform output -raw function_name_name 2>/dev/null | sed -n '1p' | tr -d '\r')
+          RG=$(terraform output -raw resource_group 2>/dev/null | sed -n '1p' | tr -d '\r')
+
+          echo "Captured FN='$FN'"
+          echo "Captured RG='$RG'"
+
+          # safe write to GITHUB_ENV
+          {
+            printf 'FUNCTION_NAME<<EOF\n'
+            printf '%s\n' "$FN"
+            printf 'EOF\n'
+          } >> $GITHUB_ENV
+
+          {
+            printf 'RG<<EOF\n'
+            printf '%s\n' "$RG"
+            printf 'EOF\n'
+          } >> $GITHUB_ENV
+
+          # also expose as job outputs
+          {
+            printf 'function_name<<EOF\n'
+            printf '%s\n' "$FN"
+            printf 'EOF\n'
+          } >> $GITHUB_OUTPUT
+
+          {
+            printf 'resource_group<<EOF\n'
+            printf '%s\n' "$RG"
+            printf 'EOF\n'
+          } >> $GITHUB_OUTPUT
+
+      - name: Show repo layout (debug)
+        run: |
+          echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
+          pwd
+          echo "Repo root listing:"
+          ls -la
+          echo "Looking for likely function source folders..."
+          find . -maxdepth 4 -type d \( -iname "*function*" -o -iname "function-src" -o -iname "src" \) -print || true
+
+      - name: Locate function source folder
+        id: findfunc
+        run: |
+          CANDIDATES=("src/function" "function-src" "function" "src" ".")
+          FOUND=""
+          for d in "${CANDIDATES[@]}"; do
+            if [ -d "$GITHUB_WORKSPACE/$d" ]; then
+              FOUND="$d"
+              break
+            fi
+          done
+
+          if [ -z "$FOUND" ]; then
+            DISCOVERED=$(find . -maxdepth 3 -type d -iname "*function*" -print -quit || true)
+            if [ -n "$DISCOVERED" ]; then
+              FOUND="${DISCOVERED#./}"
+            fi
+          fi
+
+          if [ -z "$FOUND" ]; then
+            echo "No function source folder found. Creating src/function and copying from function-src if present."
+            mkdir -p src/function
+            if [ -d "function-src" ]; then
+              cp -r function-src/* src/function/ || true
+              FOUND="src/function"
+            fi
+          fi
+
+          if [ -z "$FOUND" ]; then
+            echo "##[error]Could not find a function source folder. Please place your function app code in one of: src/function, function-src, function, src, or root."
+            exit 1
+          fi
+
+          echo "function_dir=$FOUND" >> $GITHUB_OUTPUT
+          echo "FUNCTION_DIR=$FOUND" >> $GITHUB_ENV
+          echo "Found function folder: $FOUND"
+
+      - name: Build Function (npm) if package.json present
+        run: |
+          DIR="${FUNCTION_DIR:-src/function}"
+          echo "Building function at: $DIR"
+          if [ ! -d "$DIR" ]; then
+            echo "##[error]Directory $DIR does not exist (unexpected). Aborting."
+            ls -la
+            exit 1
+          fi
+
+          cd "$DIR"
+
+          if [ -f package.json ]; then
+            echo "package.json found — running npm install"
+            npm install
+            if jq -e .scripts.build package.json >/dev/null 2>&1; then
+              npm run build || true
+            fi
+          else
+            echo "No package.json in $DIR — skipping npm install/build. Creating a zip of contents anyway."
+          fi
+
+          ZIP="$GITHUB_WORKSPACE/function-package.zip"
+          echo "Creating zip at $ZIP"
+          cd "$DIR"
+          zip -r "$ZIP" . >/dev/null
+          echo "Created $ZIP with size: $(stat -c%s "$ZIP") bytes"
+
+      - name: Deploy Function App (robust)
+        env:
+          FUNCTION_NAME: ${{ env.FUNCTION_NAME }}
+          RG: ${{ env.RG }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          set -e
+          ZIP="$GITHUB_WORKSPACE/function-package.zip"
+
+          if [ -z "$FUNCTION_NAME" ] || [ -z "$RG" ]; then
+            echo "##[error] FUNCTION_NAME or RG is empty. Ensure terraform outputs were captured."
+            echo "FUNCTION_NAME='$FUNCTION_NAME' RG='$RG'"
+            exit 1
+          fi
+
+          echo "Attempting az CLI zip deployment (retries)..."
+          for i in 1 2 3; do
+            if az functionapp deployment source config-zip --resource-group "$RG" --name "$FUNCTION_NAME" --src "$ZIP"; then
+              echo "az zipdeploy succeeded on attempt $i"
+              exit 0
+            fi
+            echo "az zipdeploy attempt $i failed — retrying in $((i*10))s..."
+            sleep $((i*10))
+          done
+
+          echo "az zipdeploy failed after retries — trying direct Kudu zipdeploy as fallback"
+          PP=$(az webapp deployment list-publishing-profiles --name "$FUNCTION_NAME" --resource-group "$RG" -o json)
+          USER=$(echo "$PP" | jq -r '.[0].userName')
+          PWD=$(echo "$PP" | jq -r '.[0].userPWD')
+          KUDU_URL=$(echo "$PP" | jq -r '.[0].publishUrl' | sed 's/:443$//')
+          KUDU_API="https://${KUDU_URL}/api/zipdeploy"
+          echo "KUDU_API=$KUDU_API"
+
+          # Upload with curl (long timeout)
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -u "$USER:$PWD" -X POST "$KUDU_API" --data-binary @"$ZIP" -H "Content-Type: application/zip" --max-time 300)
+          echo "Kudu zipdeploy status: $HTTP_STATUS"
+          if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
+            echo "Kudu deploy succeeded"
+            exit 0
+          fi
+
+          echo "Deployment failed (az + Kudu) — check app health and logs"
+          az webapp log tail --name "$FUNCTION_NAME" --resource-group "$RG" || true
+          exit 1
