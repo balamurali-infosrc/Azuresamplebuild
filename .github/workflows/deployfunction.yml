@@ -43,22 +43,22 @@ jobs:
 
       - name: Terraform Init
         working-directory: ${{ env.TF_WORKING_DIR }}
-        working-directory: terraform
+        # working-directory: terraform
         run: terraform init -input=false
 
       - name: Terraform Plan
         working-directory: ${{ env.TF_WORKING_DIR }}
-        working-directory: terraform
+        # working-directory: terraform
         run: terraform plan -input=false
 
       - name: Terraform Apply
         working-directory: ${{ env.TF_WORKING_DIR }}
-        working-directory: terraform
+        # working-directory: terraform
         run: terraform apply -auto-approve -input=false
 
       - name: Get Terraform outputs (safe)
         id: tfoutputs
-        working-directory: terraform
+        working-directory: ${{ env.TF_WORKING_DIR }}
         run: |
           # replace these names if you changed Terraform outputs
           FN=$(terraform output -raw function_name_name 2>/dev/null | sed -n '1p' | tr -d '\r')
